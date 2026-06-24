@@ -1,0 +1,27 @@
+# Build
+build/
+out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Compiled output
+*.o
+*.a
+*.so
+*.ptx
+*.cubin
+
+# Output
+output*.png
+output*.ppm
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
