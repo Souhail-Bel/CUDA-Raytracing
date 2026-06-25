@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
 
+set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
+
 # Use nvcc for .cu
 project(cuda_raytracing LANGUAGES CXX CUDA)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # NVCC is broken with GCC 16
 set(CMAKE_CUDA_HOST_COMPILER /usr/bin/g++-15)
