@@ -1,4 +1,8 @@
 # CUDA Raytracer
+<p align="center">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/b/b9/Nvidia_CUDA_Logo.jpg" alt="CUDA Logo" width="300">
+</p>
+
 Having made a raytracer on the CPU, and wanting to see what I can do with CUDA, I decided to give it a spin on the Nvidia metal.
 
 ## Build & Run
