@@ -8,4 +8,4 @@ struct RenderParams {
 };
 
 // Launch render kernel
-__host__ void launch_render(float *d_fb, const RenderParams &params);
+__host__ void launch_render(uint32_t *d_fb, const RenderParams &params);

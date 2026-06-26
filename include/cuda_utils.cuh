@@ -11,3 +11,5 @@
               __LINE__, result, cudaGetErrorString(result));                   \
     }                                                                          \
   } while (0)\
+
+//

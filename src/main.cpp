@@ -1,44 +1,105 @@
 #include "cuda_utils.cuh"
 #include "renderer.cuh"
+#include <SDL2/SDL.h>
+#include <SDL_events.h>
+#include <SDL_keycode.h>
+#include <SDL_render.h>
+#include <SDL_video.h>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cuda_runtime.h>
 #include <fstream>
 #include <iostream>
+#include <vector>
+
+static void SDL_DIE(const char *msg) {
+  fprintf(stderr, "[SDL FAIL] %s: %s\n", msg, SDL_GetError());
+  exit(EXIT_FAILURE);
+}
+
+// CONFIGURATION
+static constexpr int WIDTH = 1280;
+static constexpr int HEIGHT = 720;
 
 int main() {
-  RenderParams rp = {1280, 720, 16. / 9};
 
-  int nx = rp.width;
-  int ny = rp.height;
-  int num_pixels = ny * nx;
-  size_t fb_size = 3 * num_pixels * sizeof(float);
+  // --- SDL SETUP ---
+  if (SDL_Init(SDL_INIT_VIDEO) != 0)
+    SDL_DIE("SDL_Init");
 
-  float *fb;
-  CUDA_CHECK(cudaMallocManaged((void **)&fb, fb_size));
+  SDL_Window *win =
+      SDL_CreateWindow("CUDA Raytracer", SDL_WINDOWPOS_CENTERED,
+                       SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
+  if (!win)
+    SDL_DIE("SDL_CreateWindow");
 
-  launch_render(fb, rp);
+  SDL_Renderer *rend = SDL_CreateRenderer(
+      win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  if (!rend)
+    SDL_DIE("SDL_CreateRenderer");
 
-  std::ofstream out("output_1.ppm");
-  if (!out) {
-    std::cerr << "Error opening PPM for write.\n";
-    return 1;
-  }
+  SDL_Texture *tex = SDL_CreateTexture(
+      rend, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+  if (!tex)
+    SDL_DIE("SDL_CreateTexture");
 
-  out << "P3\n" << nx << " " << ny << "\n255\n";
-  for (int j = ny - 1; j >= 0; j--) {
-    for (int i = 0; i < nx; i++) {
-      size_t pixel_index = j * 3 * nx + i * 3;
-      float r = fb[pixel_index + 0];
-      float g = fb[pixel_index + 1];
-      float b = fb[pixel_index + 2];
-      int ir = int(255.99 * r);
-      int ig = int(255.99 * g);
-      int ib = int(255.99 * b);
-      out << ir << " " << ig << " " << ib << "\n";
+  // --- FRAMEBUFFER ---
+  const size_t fb_bytes =
+      static_cast<size_t>(WIDTH) * HEIGHT * sizeof(uint32_t);
+
+  // * * * * device VRAM
+  uint32_t *d_framebuffer = nullptr;
+  CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_framebuffer), fb_bytes));
+
+  // * * * * host RAM
+  std::vector<uint32_t> h_framebuffer(WIDTH * HEIGHT);
+
+  // --- RENDER ---
+  RenderParams rp = {WIDTH, HEIGHT, float(WIDTH) / float(HEIGHT)};
+
+  printf("[CUDA] Rendering at %dx%d (%zu threads)...\n", WIDTH, HEIGHT,
+         size_t(WIDTH) * HEIGHT);
+
+  launch_render(d_framebuffer, rp);
+
+  printf("[CUDA] Render done.\n");
+
+  // --- TEXTURE COPY ---
+  // * * * * GPU -> CPU
+  CUDA_CHECK(cudaMemcpy(h_framebuffer.data(), d_framebuffer, fb_bytes,
+                        cudaMemcpyDeviceToHost));
+
+  // * * * * CPU -> SDL Texture
+  SDL_UpdateTexture(tex, nullptr, h_framebuffer.data(),
+                    WIDTH * static_cast<int>(sizeof(uint32_t)));
+
+  printf("[SDL] Texture loaded.");
+
+  // --- SDL LOOP ---
+  bool is_running = true;
+  SDL_Event event;
+
+  while (is_running) {
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_QUIT)
+        is_running = false;
+      if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
+        is_running = false;
     }
+
+    SDL_RenderClear(rend);
+    SDL_RenderCopy(rend, tex, nullptr, nullptr);
+    SDL_RenderPresent(rend);
   }
 
-  out.close();
+  // --- END ---
+  CUDA_CHECK(cudaFree(d_framebuffer));
+  SDL_DestroyTexture(tex);
+  SDL_DestroyRenderer(rend);
+  SDL_DestroyWindow(win);
+  SDL_Quit();
+  return 0;
 
-  CUDA_CHECK(cudaFree(fb));
 }
