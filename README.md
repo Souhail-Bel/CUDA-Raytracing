@@ -20,3 +20,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ./raytracer
 ```
+
+## Credits
+* Nvidia technical blog, [Accelerated Ray Tracing in One Weekend in CUDA](https://developer.nvidia.com/blog/accelerated-ray-tracing-cuda/)
+* Lode's CG tutorials, [Tunnel Effect](https://lodev.org/cgtutor/tunnel.html)
