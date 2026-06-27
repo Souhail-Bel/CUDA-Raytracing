@@ -5,6 +5,7 @@ struct RenderParams {
   int width;
   int height;
   float aspect_ratio;
+  float time;
 };
 
 // Launch render kernel
