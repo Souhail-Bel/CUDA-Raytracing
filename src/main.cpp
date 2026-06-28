@@ -131,8 +131,8 @@ int main() {
 
       char title[96];
       snprintf(title, sizeof(title),
-               "CUDA Raytracer  |  %.1f FPS  |  %.2f ms/frame",
-               fps_display, 1000.f / fps_display);
+               "CUDA Raytracer  |  %.1f FPS  |  %.2f ms/frame", fps_display,
+               1000.f / fps_display);
       SDL_SetWindowTitle(win, title);
     }
   }

@@ -6,7 +6,7 @@ struct vec3 {
   float x, y, z;
 
   // def
-  __host__ __device__ vec3() : x(0.f), y(0.f), z(0.f) {}
+  __host__ __device__ constexpr vec3() : x(0.f), y(0.f), z(0.f) {}
   __host__ __device__ vec3(float x, float y, float z) : x(x), y(y), z(z) {}
 
   // arith

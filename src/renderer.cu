@@ -1,7 +1,17 @@
+#include "camera.cuh"
 #include "cuda_utils.cuh"
+#include "hittable.cuh"
+#include "ray.cuh"
 #include "renderer.cuh"
+#include "sphere.cuh"
 #include "vec3.cuh"
 #include <cstdint>
+
+static constexpr int MAX_SPHERES = 64;
+
+__constant__ Camera d_cam;
+__constant__ Sphere d_spheres[MAX_SPHERES];
+__constant__ int d_num_spheres;
 
 // ABGR8888, SDL_PIXELFORMAT_RGBA32 on LE Linux/x86
 __device__ __forceinline__ uint32_t color_to_rgba(const color &c) {
@@ -11,6 +21,32 @@ __device__ __forceinline__ uint32_t color_to_rgba(const color &c) {
   return (255u << 24) | (uint32_t(b) << 16) | (uint32_t(g) << 8) | r;
 }
 
+// Traverse scene
+__device__ color ray_color(const Ray &r) {
+  HitRecord rec;
+  bool hit_anything = false;
+  float curr_closest = 1e30f;
+
+  for (int i = 0; i < d_num_spheres; ++i) {
+    HitRecord curr_record;
+    if (d_spheres[i].hit(r, 0.001f, curr_closest, curr_record)) {
+      hit_anything = true;
+      curr_closest = curr_record.t;
+      rec = curr_record;
+    }
+  }
+
+  if (hit_anything) {
+    return 0.5f *
+           color(rec.normal.x + 1.f, rec.normal.y + 1.f, rec.normal.z + 1.f);
+  }
+
+  const vec3 unit_dir = r.dir.normalized();
+  const float t = 0.5f * (unit_dir.y + 1.f);
+  return lerp(color(1.f, 1.f, 1.f), color(0.7f, 0.4f, 1.f), t);
+}
+
+// kernel
 __global__ void render_kernel(uint32_t *fb, int width, int height, float t) {
   int px = threadIdx.x + blockIdx.x * blockDim.x;
   int py = threadIdx.y + blockIdx.y * blockDim.y;
@@ -20,56 +56,34 @@ __global__ void render_kernel(uint32_t *fb, int width, int height, float t) {
 
   int p_idx = py * width + px;
 
-  // parametric
   float u = float(px) / float(width - 1);
   float v = float(py) / float(height - 1);
 
-  // float r = 0.5f + 0.5f * sinf(u * 10.f + t + sinf(v * 8.f - t * 0.5f)) -
-  //           cosf(v * 10.f + t * 2.f);
-  // float g = 0.5f + 0.5f * sinf(v * 15.f - t * 5.f + sinf(u * 16.f + t));
-  // float b = 0.5f + 0.5f * cosf((u + v) * 5.f + t * 2.f + sinf(t * 5.f));
-  // color pixel_color(r, g, b);
+  const Ray r = d_cam.get_ray(u, v);
 
-  //
-  // TUNNEL EFFECT
-  // https://lodev.org/cgtutor/tunnel.html
-  // 
-
-  float center_offset_x = 0.5f + 0.15f * sinf(t * 1.0f);
-  float center_offset_y = 0.5f + 0.12f * cosf(t * 1.5f);
-
-  float cx = u - center_offset_x;
-  float cy = v - center_offset_y;
-
-  float r_polar = sqrtf(cx * cx + cy * cy);
-  r_polar = fmaxf(r_polar, 0.005f); // center approaches 0
-  float theta = atan2f(cy, cx) / 3.14159265f;
-
-  float tunnel_u = 0.7f / r_polar;
-  float tunnel_v = 2.f * theta;
-
-  float u_anim = tunnel_u + t * 1.0f; // move
-  float v_anim = tunnel_v + t * 0.4f; // rotate
-
-  float tiles_along_depth = 4.0f;
-  float tiles_around_circle = 8.0f;
-
-  float check_u = sinf(u_anim * tiles_along_depth * 3.14159265f);
-  float check_v = sinf(v_anim * tiles_around_circle * 3.14159265f);
-  float mask = (check_u * check_v > 0.0f) ? 1.0f : 0.0f;
-  float depth_shading = fminf(r_polar * 2.f, 1.0f);
-
-  // palette
-  color c1(.0f, .0f, .0f);
-  color c2(1.0f, 1.0f, 1.0f);
-
-  color pixel_color = ((mask*c1) + ((1.0f - mask) * c2)) * depth_shading;
-  fb[p_idx] = color_to_rgba(pixel_color);
+  fb[p_idx] = color_to_rgba(ray_color(r));
 }
 
 __host__ void launch_render(uint32_t *d_fb, const RenderParams &params) {
-  // 16x16 tiles
-  // 16x16/32 = 8 warps per block
+  // SETUP
+  const float angle = params.time * 1.f;
+  const float distance = 3.f;
+  const Camera cam(point3(sinf(angle) * distance, 1.f, cosf(angle) * distance),
+                   point3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), 90.f,
+                   params.aspect_ratio);
+  CUDA_CHECK(cudaMemcpyToSymbol(d_cam, &cam, sizeof(Camera)));
+
+  const int num_spheres = 4;
+  const Sphere spheres[num_spheres]{Sphere(point3(0.f, 0.f, 0.f), 0.5f),
+                                    Sphere(point3(0.f, -100.5f, 0.f), 100.f),
+                                    Sphere(point3(10.f, 0.f, 0.f), 4.f),
+                                    Sphere(point3(0.f, 2.f, 0.f), 1.f)};
+
+  CUDA_CHECK(
+      cudaMemcpyToSymbol(d_spheres, &spheres, num_spheres * sizeof(Sphere)));
+  CUDA_CHECK(cudaMemcpyToSymbol(d_num_spheres, &num_spheres, sizeof(int)));
+
+  // LAUNCH
   const dim3 block_size(16, 16);
 
   const dim3 grid_size((params.width + block_size.x - 1) / block_size.x,
