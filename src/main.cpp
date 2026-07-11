@@ -13,7 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cuda_runtime.h>
-#include <vector>
 
 static void SDL_DIE(const char *msg) {
   fprintf(stderr, "[SDL FAIL] %s: %s\n", msg, SDL_GetError());
@@ -68,7 +67,8 @@ int main() {
   CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_framebuffer), fb_bytes));
 
   // * * * * host RAM
-  std::vector<uint32_t> h_framebuffer(WIDTH * HEIGHT);
+  uint32_t *h_framebuffer = nullptr;
+  CUDA_CHECK(cudaMallocHost(reinterpret_cast<void **>(&h_framebuffer), fb_bytes));
 
   // Rand states allocation
   void *d_rand_states = alloc_rand_states(WIDTH, HEIGHT);
@@ -94,11 +94,11 @@ int main() {
     launch_render(d_framebuffer, d_rand_states, rp);
 
     // * * * * GPU -> CPU
-    CUDA_CHECK(cudaMemcpy(h_framebuffer.data(), d_framebuffer, fb_bytes,
+    CUDA_CHECK(cudaMemcpy(h_framebuffer, d_framebuffer, fb_bytes,
                           cudaMemcpyDeviceToHost));
 
     // * * * * CPU -> SDL Texture
-    SDL_UpdateTexture(tex, nullptr, h_framebuffer.data(),
+    SDL_UpdateTexture(tex, nullptr, h_framebuffer,
                       WIDTH * static_cast<int>(sizeof(uint32_t)));
 
     // * * * * PRESENT
@@ -142,6 +142,7 @@ int main() {
   // --- END ---
   CUDA_CHECK(cudaFree(d_rand_states));
   CUDA_CHECK(cudaFree(d_framebuffer));
+  CUDA_CHECK(cudaFreeHost(h_framebuffer));
   SDL_DestroyTexture(tex);
   SDL_DestroyRenderer(rend);
   SDL_DestroyWindow(win);
