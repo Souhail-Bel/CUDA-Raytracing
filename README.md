@@ -22,7 +22,7 @@ make -j$(nproc)
 ```
 
 ## TODO
-[ ] - Switch to CUDA-OpenGL Interop
+- [ ] - Switch to CUDA-OpenGL Interop
 
 ## Credits
 * Nvidia technical blog, [Accelerated Ray Tracing in One Weekend in CUDA](https://developer.nvidia.com/blog/accelerated-ray-tracing-cuda/)

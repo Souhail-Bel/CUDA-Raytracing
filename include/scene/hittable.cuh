@@ -1,6 +1,6 @@
 #pragma once
-#include "ray.cuh"
-#include "vec3.cuh"
+#include "../math/ray.cuh"
+#include "../math/vec3.cuh"
 
 struct HitRecord {
   point3 point;

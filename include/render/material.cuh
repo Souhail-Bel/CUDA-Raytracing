@@ -1,7 +1,7 @@
 #pragma once
-#include "hittable.cuh"
-#include "ray.cuh"
-#include "vec3.cuh"
+#include "../scene/hittable.cuh"
+#include "../math/ray.cuh"
+#include "../math/vec3.cuh"
 #include <cstdint>
 #include <curand_kernel.h>
 

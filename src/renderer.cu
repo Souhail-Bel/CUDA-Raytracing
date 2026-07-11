@@ -1,11 +1,11 @@
-#include "camera.cuh"
-#include "cuda_utils.cuh"
-#include "hittable.cuh"
-#include "material.cuh"
-#include "ray.cuh"
-#include "renderer.cuh"
-#include "sphere.cuh"
-#include "vec3.cuh"
+#include "scene/camera.cuh"
+#include "utils/cuda_utils.cuh"
+#include "scene/hittable.cuh"
+#include "render/material.cuh"
+#include "math/ray.cuh"
+#include "render/renderer.cuh"
+#include "scene/sphere.cuh"
+#include "math/vec3.cuh"
 #include <cstdint>
 
 static constexpr int MAX_OBJECTS = 64;
@@ -182,7 +182,4 @@ __host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
 
   // Check kernel execution
   CUDA_CHECK(cudaGetLastError());
-
-  // wait for framebuffer copy to CPU
-  CUDA_CHECK(cudaDeviceSynchronize());
 }

@@ -1,5 +1,5 @@
-#include "cuda_utils.cuh"
-#include "renderer.cuh"
+#include "utils/cuda_utils.cuh"
+#include "render/renderer.cuh"
 #include <SDL2/SDL.h>
 #include <SDL_events.h>
 #include <SDL_keycode.h>

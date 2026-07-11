@@ -1,5 +1,5 @@
 #pragma once
-#include "ray.cuh"
+#include "../math/ray.cuh"
 #include <cmath>
 
 struct Camera {
