@@ -6,7 +6,7 @@ struct Sphere {
   float radius;
   int mat_idx;
 
-  __host__ __device__ constexpr Sphere() : center{}, radius(0.f), mat_idx(0) {}
+  __host__ __device__ constexpr Sphere() : radius(0.f), mat_idx(0) {}
   __host__ __device__ Sphere(const point3 &c, float r, int m)
       : center(c), radius(r), mat_idx(m) {}
 
