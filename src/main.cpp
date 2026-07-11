@@ -75,6 +75,7 @@ int main() {
 
   // --- RENDER SETUP ---
   RenderParams rp = {WIDTH, HEIGHT, float(WIDTH) / float(HEIGHT), 0.f};
+  init_scene();
 
   int fps_frame_count = 0;
   float fps_display = 0.f;

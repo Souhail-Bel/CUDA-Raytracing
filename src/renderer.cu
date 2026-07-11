@@ -130,19 +130,7 @@ void *alloc_rand_states(int width, int height) {
   return static_cast<void *>(states);
 }
 
-// KERNEL LAUNCH
-__host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
-                            const RenderParams &params) {
-  auto *states = static_cast<curandState *>(d_rand_states);
-
-  // SETUP
-  const float angle = params.time * 0.1f;
-  const float distance = 3.f;
-  const Camera cam(point3(sinf(angle) * distance, 1.f, cosf(angle) * distance),
-                   point3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), 90.f,
-                   params.aspect_ratio);
-  CUDA_CHECK(cudaMemcpyToSymbol(d_cam, &cam, sizeof(Camera)));
-
+__host__ void init_scene() {
   const int num_spheres = 6;
   const int num_materials = 5;
 
@@ -168,6 +156,20 @@ __host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
   CUDA_CHECK(
       cudaMemcpyToSymbol(d_spheres, &spheres, num_spheres * sizeof(Sphere)));
   CUDA_CHECK(cudaMemcpyToSymbol(d_num_spheres, &num_spheres, sizeof(int)));
+}
+
+// KERNEL LAUNCH
+__host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
+                            const RenderParams &params) {
+  auto *states = static_cast<curandState *>(d_rand_states);
+
+  // SETUP
+  const float angle = params.time * 0.1f;
+  const float distance = 3.f;
+  const Camera cam(point3(sinf(angle) * distance, 1.f, cosf(angle) * distance),
+                   point3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), 90.f,
+                   params.aspect_ratio);
+  CUDA_CHECK(cudaMemcpyToSymbol(d_cam, &cam, sizeof(Camera)));
 
   // LAUNCH
   const dim3 block_size(16, 16);

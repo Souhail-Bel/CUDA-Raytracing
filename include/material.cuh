@@ -17,7 +17,7 @@ struct Material {
   float fuzz; // 0 mirror -> 1 very rough
   float ior;  // dielectric, 1.33 water
   MatType type;
-  
+
   __host__ __device__ constexpr Material()
       : albedo{}, fuzz(0.f), ior(1.f), type{} {}
 
@@ -31,16 +31,15 @@ __device__ __forceinline__ float rand_f(curandState *s) {
   return curand_uniform(s);
 }
 
-__device__ vec3 rand_in_unit_sphere(curandState *s) {
-  while (true) {
-    vec3 p(2.f * rand_f(s) - 1.f, 2.f * rand_f(s) - 1.f, 2.f * rand_f(s) - 1.f);
-    if (p.length_squared() < 1.f)
-      return p;
-  }
+__device__ __forceinline__ vec3 rand_unit_vector(curandState *s) {
+  float z = 1.f - 2.f * rand_f(s);
+  float r = sqrtf(fmaxf(0.f, 1.f - z * z));
+  float phi = 2.f * 3.14159265f * rand_f(s);
+  return vec3(r * cosf(phi), r * sinf(phi), z);
 }
 
-__device__ __forceinline__ vec3 rand_unit_vector(curandState *s) {
-  return rand_in_unit_sphere(s).normalized();
+__device__ vec3 rand_in_unit_sphere(curandState *s) {
+  return rand_unit_vector(s) * powf(rand_f(s), 1.f / 3.f);
 }
 
 // SCHLICK APPROX
