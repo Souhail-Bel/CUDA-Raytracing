@@ -8,5 +8,9 @@ struct RenderParams {
   float time;
 };
 
+// allocate and init curandState/pixel
+void *alloc_rand_states(int width, int height);
+
 // Launch render kernel
-__host__ void launch_render(uint32_t *d_fb, const RenderParams &params);
+__host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
+                            const RenderParams &params);

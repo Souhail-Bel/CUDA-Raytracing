@@ -13,8 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cuda_runtime.h>
-#include <fstream>
-#include <iostream>
 #include <vector>
 
 static void SDL_DIE(const char *msg) {
@@ -72,6 +70,9 @@ int main() {
   // * * * * host RAM
   std::vector<uint32_t> h_framebuffer(WIDTH * HEIGHT);
 
+  // Rand states allocation
+  void *d_rand_states = alloc_rand_states(WIDTH, HEIGHT);
+
   // --- RENDER SETUP ---
   RenderParams rp = {WIDTH, HEIGHT, float(WIDTH) / float(HEIGHT), 0.f};
 
@@ -89,7 +90,7 @@ int main() {
     rp.time = s_since(t_0);
 
     // * * RENDER AND TEXTURE COPY
-    launch_render(d_framebuffer, rp);
+    launch_render(d_framebuffer, d_rand_states, rp);
 
     // * * * * GPU -> CPU
     CUDA_CHECK(cudaMemcpy(h_framebuffer.data(), d_framebuffer, fb_bytes,
@@ -138,6 +139,7 @@ int main() {
   }
 
   // --- END ---
+  CUDA_CHECK(cudaFree(d_rand_states));
   CUDA_CHECK(cudaFree(d_framebuffer));
   SDL_DestroyTexture(tex);
   SDL_DestroyRenderer(rend);

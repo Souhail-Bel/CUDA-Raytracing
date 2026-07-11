@@ -85,6 +85,25 @@ __host__ __device__ inline vec3 clamp(const vec3 &v, float lo, float hi) {
           fmaxf(lo, fminf(hi, v.z))};
 }
 
+// Reflection
+//  u : incident ray
+//  n : surface normal
+__host__ __device__ inline vec3 reflect(const vec3 &u, const vec3 &n) {
+  return u - 2.f * dot(u, n) * n;
+}
+
+// Snell's Law
+//  uv : unit incident dir
+//  n  : surface normal
+//  etai_etat : n1/n2
+__host__ __device__ inline vec3 refract(const vec3 &uv, const vec3 &n,
+                                        float etai_etat) {
+  float cos_theta = fminf(dot(-uv, n), 1.f);
+  vec3 r_perp = etai_etat * (uv + cos_theta * n);
+  vec3 r_parallel = -sqrtf(fabsf(1.f - r_perp.length_squared())) * n;
+  return r_perp + r_parallel;
+}
+
 // aliases
 using color = vec3;
 using point3 = vec3;

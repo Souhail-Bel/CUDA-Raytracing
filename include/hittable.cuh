@@ -6,6 +6,7 @@ struct HitRecord {
   point3 point;
   vec3 normal;
   float t;
+  int mat_idx;
   bool is_front_face;
 
   __device__ void set_face_normal(const Ray &r, const vec3 &outward_normal) {

@@ -24,6 +24,7 @@ set(CMAKE_CUDA_ARCHITECTURES 86)
 
 # i just use SDL2
 find_package(SDL2 REQUIRED)
+find_package(CUDAToolkit REQUIRED) # used for CUDA::curand
 
 add_executable(raytracer
     src/main.cpp
@@ -38,6 +39,7 @@ target_include_directories(raytracer PRIVATE
 
 target_link_libraries(raytracer PRIVATE
     ${SDL2_LIBRARIES}
+    CUDA::curand
 )
 
 # CUDA compiler flags
