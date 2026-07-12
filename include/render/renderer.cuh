@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cuda_runtime.h>
 
 struct RenderParams {
   int width;
@@ -12,7 +13,7 @@ struct RenderParams {
 void *alloc_rand_states(int width, int height);
 
 // initializes scene data
-void init_scene();
+__host__ void init_scene(const RenderParams& rp);
 
 // Launch render kernel
 __host__ void launch_render(uint32_t *d_fb, void *d_rand_states,

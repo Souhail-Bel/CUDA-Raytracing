@@ -83,7 +83,7 @@ __device__ color ray_color(Ray r, curandState *s) {
     HitRecord rec;
 
     if (!hit_scene(r, 0.001f, 1e30f, rec)) { // miss
-      accumulated += throughput * sky(r);
+      // accumulated += throughput * sky(r);
       break;
     }
 
@@ -165,35 +165,44 @@ void *alloc_rand_states(int width, int height) {
   return static_cast<void *>(states);
 }
 
-__host__ void init_scene() {
+__host__ void init_scene(const RenderParams &params) {
+
+  // SETUP
+  const float distance = -8.f;
+  const Camera cam(point3(distance, 2.f, 0), point3(0.f, 1.f, 0.f),
+                   vec3(0.f, 1.f, 0.f), 60.f, params.aspect_ratio);
+  CUDA_CHECK(cudaMemcpyToSymbol(d_cam, &cam, sizeof(Camera)));
+
   const int num_materials = 7;
-  const int num_spheres = 5;
-  const int num_planes = 1;
-  const int num_rects = 1;
+  const int num_spheres = 1;
+  const int num_planes = 2;
+  const int num_rects = 5;
 
   const Material mats[num_materials] = {
-      make_lambertian(color(0.8f, 0.8f, 0.f)),
-      make_metal(color(0.3f, 0.3f, 0.3f)),
-      make_dielectric(),
-      make_lambertian(color(0.2f, 0.6f, 0.2f)),
-      make_metal(color(0.1f, 0.1f, 0.4f), 0.5f),
-      make_lambertian(color(1.f, 0.1f, 0.2f)),
+      make_lambertian(color(1.f, 1.f, 1.f)),
+      make_lambertian(color(1.f, 0.f, 0.f)),
+      make_lambertian(color(0.f, 0.f, 1.f)),
       make_emitter(color(1.f, 1.f, 1.f), 10.f),
+      make_metal(color(0.3f, 0.3f, 0.3f), 0.3f),
+      make_dielectric(),
+      make_lambertian(color(0.f, 1.f, 0.f)),
   };
 
   const Sphere spheres[num_spheres] = {
-      Sphere(point3(0.f, 0.f, 0.f), 0.5f, 0),
-      Sphere(point3(-10.f, 0.f, 0.f), 4.f, 2),
-      Sphere(point3(0.f, 2.f, 0.f), 1.f, 3),
-      Sphere(point3(1.f, 1.f, 1.5f), 0.5f, 2),
-      Sphere(point3(-1.f, 1.f, 1.f), 0.75f, 4),
+      Sphere(point3(0.f, 0.5f, 0.f), 0.5f, 6),
   };
 
   const Plane planes[num_planes] = {
-      Plane(point3(0.f, -0.5f, 0.f), vec3(0.f, 1.f, 0.f), 1)};
+      Plane(point3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), 0),  // ground
+      Plane(point3(0.f, 5.f, 0.f), vec3(0.f, -1.f, 0.f), 0), // roof
+  };
 
   const Rect rects[num_rects] = {
-      Rect(0.5f, 1.3f, 0.f, 1.f, 2.f, RectAxis::YZ, 6, true),
+      Rect(0.f, 1.f, -1.f, 1.f, 5.f, RectAxis::XZ, 3, true), // lamp
+      Rect(0.f, 5.f, -50.f, 50.f, 4.f, RectAxis::YZ, 0),     // far wall
+      Rect(-10.f, 10.f, 0.f, 5.f, -4.f, RectAxis::XY, 1),    // right wall
+      Rect(-10.f, 10.f, 0.f, 5.f, 4.f, RectAxis::XY, 2),     // left wall
+      Rect(0.f, 5.f, -50.f, 50.f, -15.f, RectAxis::YZ, 0),    // back wall
   };
 
   CUDA_CHECK(
@@ -211,14 +220,6 @@ __host__ void init_scene() {
 __host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
                             const RenderParams &params) {
   auto *states = static_cast<curandState *>(d_rand_states);
-
-  // SETUP
-  const float angle = params.time * 0.1f;
-  const float distance = 3.f;
-  const Camera cam(point3(sinf(angle) * distance, 1.f, cosf(angle) * distance),
-                   point3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f), 90.f,
-                   params.aspect_ratio);
-  CUDA_CHECK(cudaMemcpyToSymbol(d_cam, &cam, sizeof(Camera)));
 
   // LAUNCH
   const dim3 block_size(16, 16);

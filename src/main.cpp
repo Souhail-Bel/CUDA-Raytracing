@@ -1,5 +1,5 @@
-#include "utils/cuda_utils.cuh"
 #include "render/renderer.cuh"
+#include "utils/cuda_utils.cuh"
 #include <SDL2/SDL.h>
 #include <SDL_events.h>
 #include <SDL_keycode.h>
@@ -68,14 +68,15 @@ int main() {
 
   // * * * * host RAM
   uint32_t *h_framebuffer = nullptr;
-  CUDA_CHECK(cudaMallocHost(reinterpret_cast<void **>(&h_framebuffer), fb_bytes));
+  CUDA_CHECK(
+      cudaMallocHost(reinterpret_cast<void **>(&h_framebuffer), fb_bytes));
 
   // Rand states allocation
   void *d_rand_states = alloc_rand_states(WIDTH, HEIGHT);
 
   // --- RENDER SETUP ---
   RenderParams rp = {WIDTH, HEIGHT, float(WIDTH) / float(HEIGHT), 0.f};
-  init_scene();
+  init_scene(rp);
 
   int fps_frame_count = 0;
   float fps_display = 0.f;
