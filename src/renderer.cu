@@ -95,7 +95,14 @@ __device__ color ray_color(Ray r, curandState *s) {
 
     throughput = throughput * attentuation;
     r = scattered;
-    
+
+    // RUSSIAN ROULETTE
+    if (bounce > 3) {
+      float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
+      p = fminf(p, 0.95f); // avoid p==1 edge case
+      if (rand_f(s) > p) break;
+      throughput = throughput / p; // compensate
+    }
   }
 
   return accumulated;
