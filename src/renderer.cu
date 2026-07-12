@@ -100,7 +100,8 @@ __device__ color ray_color(Ray r, curandState *s) {
     if (bounce > 3) {
       float p = fmaxf(throughput.x, fmaxf(throughput.y, throughput.z));
       p = fminf(p, 0.95f); // avoid p==1 edge case
-      if (rand_f(s) > p) break;
+      if (rand_f(s) > p)
+        break;
       throughput = throughput / p; // compensate
     }
   }
@@ -173,27 +174,37 @@ __host__ void init_scene(const RenderParams &params) {
 
   // SETUP
   const float distance = -8.f;
-  const Camera cam(point3(distance, 2.f, 0), point3(0.f, 1.f, 0.f),
+  const Camera cam(point3(distance, 3.f, 0), point3(0.f, 1.f, 0.f),
                    vec3(0.f, 1.f, 0.f), 60.f, params.aspect_ratio);
   CUDA_CHECK(cudaMemcpyToSymbol(d_cam, &cam, sizeof(Camera)));
 
-  const int num_materials = 7;
-  const int num_spheres = 1;
+  const int num_materials = 8;
+  const int num_spheres = 3;
   const int num_planes = 2;
-  const int num_rects = 5;
+  const int num_rects = 10;
 
   const Material mats[num_materials] = {
       make_lambertian(color(1.f, 1.f, 1.f)),
       make_lambertian(color(1.f, 0.f, 0.f)),
       make_lambertian(color(0.f, 0.f, 1.f)),
-      make_emitter(color(1.f, 1.f, 1.f), 10.f),
+      make_emitter(color(1.f, 1.f, 1.f), 20.f),
       make_metal(color(0.3f, 0.3f, 0.3f), 0.3f),
       make_dielectric(),
       make_lambertian(color(0.f, 1.f, 0.f)),
+      make_lambertian(color(1.f, 1.f, 0.f)),
   };
 
+  const point3 &pedestal_ball_pos = point3(0.f, 2.5f, -2.f);
+  const Sphere &pedestal_ball = Sphere(pedestal_ball_pos, 0.75f, 7);
+  const float pedestal_thickness = 0.7f;
+  const point3 &pedestal_offset = pedestal_ball_pos -
+                                  pedestal_thickness * point3(1.f, 0.f, 1.f) -
+                                  point3(0.f, pedestal_ball.radius, 0.f);
+
   const Sphere spheres[num_spheres] = {
-      Sphere(point3(0.f, 0.5f, 0.f), 0.5f, 6),
+      Sphere(point3(-3.f, 1.f, -2.f), 1.f, 4),
+      Sphere(point3(-2.f, 1.5f, 2.f), 1.5f, 5),
+      pedestal_ball,
   };
 
   const Plane planes[num_planes] = {
@@ -203,10 +214,28 @@ __host__ void init_scene(const RenderParams &params) {
 
   const Rect rects[num_rects] = {
       Rect(0.f, 1.f, -1.f, 1.f, 5.f, RectAxis::XZ, 3, true), // lamp
-      Rect(0.f, 5.f, -50.f, 50.f, 4.f, RectAxis::YZ, 0),     // far wall
+      Rect(0.f, 5.f, -50.f, 50.f, 4.f, RectAxis::YZ, 6),     // far wall
       Rect(-10.f, 10.f, 0.f, 5.f, -4.f, RectAxis::XY, 1),    // right wall
       Rect(-10.f, 10.f, 0.f, 5.f, 4.f, RectAxis::XY, 2),     // left wall
-      Rect(0.f, 5.f, -50.f, 50.f, -15.f, RectAxis::YZ, 0),    // back wall
+      Rect(0.f, 5.f, -50.f, 50.f, -15.f, RectAxis::YZ, 0),   // back wall
+      Rect(pedestal_offset.x, pedestal_offset.x + 2 * pedestal_thickness,
+           pedestal_offset.z, pedestal_offset.z + 2 * pedestal_thickness,
+           pedestal_offset.y, RectAxis::XZ,
+           0), // top pedestal
+      Rect(pedestal_offset.x, pedestal_offset.x + 2 * pedestal_thickness, 0.f,
+           pedestal_offset.y, pedestal_offset.z + 2 * pedestal_thickness,
+           RectAxis::XY, 0), // right pedestal
+      Rect(pedestal_offset.x, pedestal_offset.x + 2 * pedestal_thickness, 0.f,
+           pedestal_offset.y, pedestal_offset.z, RectAxis::XY,
+           0), // left pedestal
+      Rect(0.f, pedestal_offset.y, pedestal_offset.z,
+           pedestal_offset.z + 2 * pedestal_thickness,
+           pedestal_offset.x + 2 * pedestal_thickness, RectAxis::YZ,
+           0), // far pedestal
+      Rect(0.f, pedestal_offset.y, pedestal_offset.z,
+           pedestal_offset.z + 2 * pedestal_thickness, pedestal_offset.x,
+           RectAxis::YZ,
+           0), // back pedestal
   };
 
   CUDA_CHECK(

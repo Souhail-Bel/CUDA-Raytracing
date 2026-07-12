@@ -20,8 +20,8 @@ static void SDL_DIE(const char *msg) {
 }
 
 // CONFIGURATION
-static constexpr int WIDTH = 1280;
-static constexpr int HEIGHT = 720;
+static constexpr int WIDTH = 640;
+static constexpr int HEIGHT = 480;
 static constexpr int TARGET_FPS = 60;
 static constexpr double TARGET_FRAME_MS = 1000. / TARGET_FPS; // 16.66ms
 
