@@ -75,26 +75,33 @@ __device__ bool hit_scene(const Ray &r, float t_min, float t_max,
 
 // Traverse scene
 __device__ color ray_color(Ray r, curandState *s) {
+  color accumulated(0.f, 0.f, 0.f);
   color throughput(1.f, 1.f, 1.f); // accumulate attenuations
 
   for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
 
     HitRecord rec;
 
-    if (!hit_scene(r, 0.001f, 1e30f, rec)) // miss
-      return throughput * sky(r);
+    if (!hit_scene(r, 0.001f, 1e30f, rec)) { // miss
+      accumulated += throughput * sky(r);
+      break;
+    }
 
+    const Material &mat = d_materials[rec.mat_idx];
+    // collect emission
+    accumulated += throughput * emit(mat, rec);
+    // then, scatter
     color attentuation;
     Ray scattered;
 
-    if (!scatter(d_materials[rec.mat_idx], rec, r, attentuation, scattered, s))
-      return color(0.f, 0.f, 0.f); // absorb
+    if (!scatter(mat, rec, r, attentuation, scattered, s))
+      break; // absorb
 
     throughput = throughput * attentuation;
     r = scattered;
   }
 
-  return color(0.f, 0.f, 0.f);
+  return accumulated;
 }
 
 // kernel
@@ -159,18 +166,19 @@ void *alloc_rand_states(int width, int height) {
 }
 
 __host__ void init_scene() {
-  const int num_materials = 6;
+  const int num_materials = 7;
   const int num_spheres = 5;
   const int num_planes = 1;
   const int num_rects = 1;
 
   const Material mats[num_materials] = {
-      {color(0.8f, 0.8f, 0.f), 0.f, 0.f, MatType::Lambertian},
-      {color(0.3f, 0.3f, 0.3f), 0.f, 0.f, MatType::Metal},
-      {color(1.f, 1.f, 1.f), 0.f, 1.5f, MatType::Dielectric},
-      {color(0.2f, 0.6f, 0.2f), 0.f, 0.f, MatType::Lambertian},
-      {color(0.1f, 0.1f, 0.4f), 0.5f, 0.f, MatType::Metal},
-      {color(1.f, 0.1f, 0.2f), 0.f, 0.f, MatType::Lambertian},
+      make_lambertian(color(0.8f, 0.8f, 0.f)),
+      make_metal(color(0.3f, 0.3f, 0.3f)),
+      make_dielectric(),
+      make_lambertian(color(0.2f, 0.6f, 0.2f)),
+      make_metal(color(0.1f, 0.1f, 0.4f), 0.5f),
+      make_lambertian(color(1.f, 0.1f, 0.2f)),
+      make_emitter(color(1.f, 1.f, 1.f), 10.f),
   };
 
   const Sphere spheres[num_spheres] = {
@@ -185,7 +193,7 @@ __host__ void init_scene() {
       Plane(point3(0.f, -0.5f, 0.f), vec3(0.f, 1.f, 0.f), 1)};
 
   const Rect rects[num_rects] = {
-      Rect(0.5f, 1.3f, 0.f, 1.f, 2.f, RectAxis::YZ, 5),
+      Rect(0.5f, 1.3f, 0.f, 1.f, 2.f, RectAxis::YZ, 6, true),
   };
 
   CUDA_CHECK(

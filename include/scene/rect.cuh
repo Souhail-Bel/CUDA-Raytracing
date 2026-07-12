@@ -8,6 +8,7 @@ struct Rect {
   float a0, a1;
   float b0, b1;
   float k;
+  bool is_flipped = false;
   RectAxis axis;
   int mat_idx;
 
@@ -15,8 +16,9 @@ struct Rect {
       : a0(0), a1(0), b0(0), b1(0), k(0), axis(RectAxis::XZ), mat_idx(0) {}
 
   __host__ __device__ Rect(float a0, float a1, float b0, float b1, float k,
-                           const RectAxis &axis, int m)
-      : a0(a0), a1(a1), b0(b0), b1(b1), k(k), axis(axis), mat_idx(m) {}
+                           const RectAxis &axis, int m, bool is_flipped = false)
+      : a0(a0), a1(a1), b0(b0), b1(b1), k(k), axis(axis), mat_idx(m),
+        is_flipped(is_flipped) {}
 
   __device__ bool hit(const Ray &r, float t_min, float t_max,
                       HitRecord &rec) const {
@@ -72,7 +74,7 @@ struct Rect {
     rec.t = t;
     rec.point = r.at(t);
     rec.mat_idx = mat_idx;
-    rec.set_face_normal(r, outward_normal);
+    rec.set_face_normal(r, is_flipped ? -outward_normal : outward_normal);
     return true;
   }
 };

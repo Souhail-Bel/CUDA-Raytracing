@@ -1,7 +1,7 @@
 #pragma once
-#include "../scene/hittable.cuh"
 #include "../math/ray.cuh"
 #include "../math/vec3.cuh"
+#include "../scene/hittable.cuh"
 #include <cstdint>
 #include <curand_kernel.h>
 
@@ -9,22 +9,45 @@
 enum class MatType : uint8_t { //
   Lambertian = 0,
   Metal = 1,
-  Dielectric = 2
+  Dielectric = 2,
+  Emitter = 3,
 };
 
 struct Material {
   color albedo;
+  color emission;
   float fuzz; // 0 mirror -> 1 very rough
   float ior;  // dielectric, 1.33 water
   MatType type;
 
   __host__ __device__ constexpr Material()
-      : albedo{}, fuzz(0.f), ior(1.f), type{} {}
+      : albedo{}, emission{}, fuzz(0.f), ior(1.f), type{} {}
 
-  __host__ __device__ Material( //
-      color albedo, float fuzz, float ior, MatType type)
-      : albedo(albedo), fuzz(fuzz), ior(ior), type(type) {}
+  __host__ __device__ Material(                   //
+      const color &albedo, const color &emission, //
+      float fuzz, float ior, MatType type)
+      : albedo(albedo), emission(emission), fuzz(fuzz), ior(ior), type(type) {}
 };
+
+// CONSTRUCTORS
+__host__ inline Material make_lambertian(const color &albedo) {
+  return {albedo, color(0.f, 0.f, 0.f), 0.f, 0.f, MatType::Lambertian};
+}
+
+__host__ inline Material make_metal(const color &albedo, float fuzz = 0.f) {
+  return {albedo, color(0.f, 0.f, 0.f), fuzz, 0.f, MatType::Metal};
+}
+
+__host__ inline Material make_dielectric(float ior = 1.5f) {
+  return {color(1.f, 1.f, 1.f), color(0.f, 0.f, 0.f), 0.f, ior,
+          MatType::Dielectric};
+}
+
+__host__ inline Material make_emitter(const color &emit_color,
+                                      float strength = 1.f) {
+  return {color(0.f, 0.f, 0.f), strength * emit_color, 0.f, 0.f,
+          MatType::Emitter};
+}
 
 // HELPERS
 __device__ __forceinline__ float rand_f(curandState *s) {
@@ -98,6 +121,14 @@ __device__ bool scatter_dielectric( //
   return true;
 }
 
+__device__ __forceinline__ color emit(const Material &mat,
+                                      const HitRecord &rec) {
+  if (mat.type != MatType::Emitter) // non-emissive mats
+    return color(0.f, 0.f, 0.f);
+  // single-side emission
+  return rec.is_front_face ? mat.emission : color(0.f, 0.f, 0.f);
+}
+
 //
 __device__ bool scatter( //
     const Material &mat, const HitRecord &rec, const Ray &r_in,
@@ -109,6 +140,8 @@ __device__ bool scatter( //
     return scatter_metal(mat, rec, r_in, attenuation, scattered, s);
   case MatType::Dielectric:
     return scatter_dielectric(mat, rec, r_in, attenuation, scattered, s);
+  case MatType::Emitter:
+    return false; // black body
   default:
     return false;
   }
