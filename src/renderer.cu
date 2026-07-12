@@ -110,8 +110,9 @@ __device__ color ray_color(Ray r, curandState *s) {
 }
 
 // kernel
-__global__ void render_kernel(uint32_t *fb, int width, int height, int samples,
-                              curandState *rand_states) {
+__global__ void render_kernel(uint32_t *fb, vec3 *accum_fb, int width,
+                              int height, int samples, curandState *rand_states,
+                              int frame_index) {
   const int px = threadIdx.x + blockIdx.x * blockDim.x;
   const int py = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -133,7 +134,20 @@ __global__ void render_kernel(uint32_t *fb, int width, int height, int samples,
 
   rand_states[p_idx] = state; // for next frame
 
-  fb[p_idx] = color_to_rgba(pixel / float(samples));
+  color curr_frame_color = pixel / float(samples);
+  color accumulated_color = curr_frame_color;
+  if (frame_index > 1) {
+    color old_color = accum_fb[p_idx];
+    // Stable rolling average formula:
+    accumulated_color =
+        old_color + (curr_frame_color - old_color) / float(frame_index);
+  }
+
+  // Save the high-precision float color for the next frame
+  accum_fb[p_idx] = accumulated_color;
+
+  // Output to the display texture
+  fb[p_idx] = color_to_rgba(accumulated_color);
 }
 
 // called once at startup, each thread gets unique sseed
@@ -250,8 +264,8 @@ __host__ void init_scene(const RenderParams &params) {
 }
 
 // KERNEL LAUNCH
-__host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
-                            const RenderParams &params) {
+__host__ void launch_render(uint32_t *d_fb, vec3 *d_accum_fb,
+                            void *d_rand_states, const RenderParams &params) {
   auto *states = static_cast<curandState *>(d_rand_states);
 
   // LAUNCH
@@ -260,8 +274,9 @@ __host__ void launch_render(uint32_t *d_fb, void *d_rand_states,
   const dim3 grid_size((params.width + block_size.x - 1) / block_size.x,
                        (params.height + block_size.y - 1) / block_size.y);
 
-  render_kernel<<<grid_size, block_size>>>(d_fb, params.width, params.height,
-                                           NUM_SAMPLING, states);
+  render_kernel<<<grid_size, block_size>>>(d_fb, d_accum_fb, params.width,
+                                           params.height, NUM_SAMPLING, states,
+                                           params.frame_index);
 
   // Check kernel execution
   CUDA_CHECK(cudaGetLastError());

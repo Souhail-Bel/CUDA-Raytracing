@@ -66,6 +66,11 @@ int main() {
   uint32_t *d_framebuffer = nullptr;
   CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_framebuffer), fb_bytes));
 
+  vec3 *d_accum_buffer = nullptr;
+  const size_t accum_bytes = static_cast<size_t>(WIDTH) * HEIGHT * sizeof(vec3);
+  CUDA_CHECK(
+      cudaMalloc(reinterpret_cast<void **>(&d_accum_buffer), accum_bytes));
+
   // * * * * host RAM
   uint32_t *h_framebuffer = nullptr;
   CUDA_CHECK(
@@ -75,7 +80,7 @@ int main() {
   void *d_rand_states = alloc_rand_states(WIDTH, HEIGHT);
 
   // --- RENDER SETUP ---
-  RenderParams rp = {WIDTH, HEIGHT, float(WIDTH) / float(HEIGHT), 0.f};
+  RenderParams rp = {WIDTH, HEIGHT, float(WIDTH) / float(HEIGHT), 0.f, 1};
   init_scene(rp);
 
   int fps_frame_count = 0;
@@ -92,7 +97,8 @@ int main() {
     rp.time = s_since(t_0);
 
     // * * RENDER AND TEXTURE COPY
-    launch_render(d_framebuffer, d_rand_states, rp);
+    launch_render(d_framebuffer, d_accum_buffer, d_rand_states, rp);
+    rp.frame_index++;
 
     // * * * * GPU -> CPU
     CUDA_CHECK(cudaMemcpy(h_framebuffer, d_framebuffer, fb_bytes,
@@ -111,8 +117,11 @@ int main() {
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_QUIT)
         is_running = false;
-      if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
-        is_running = false;
+      if (event.type == SDL_KEYDOWN) {
+        rp.frame_index = 1;
+        if (event.key.keysym.sym == SDLK_ESCAPE)
+          is_running = false;
+      }
     }
 
     // * * FPS CAP
@@ -142,6 +151,7 @@ int main() {
 
   // --- END ---
   CUDA_CHECK(cudaFree(d_rand_states));
+  CUDA_CHECK(cudaFree(d_accum_buffer));
   CUDA_CHECK(cudaFree(d_framebuffer));
   CUDA_CHECK(cudaFreeHost(h_framebuffer));
   SDL_DestroyTexture(tex);
