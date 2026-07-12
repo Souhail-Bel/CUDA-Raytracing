@@ -45,29 +45,25 @@ __device__ __forceinline__ color sky(const Ray &r) {
 
 __device__ bool hit_scene(const Ray &r, float t_min, float t_max,
                           HitRecord &rec) {
-  HitRecord curr_record;
   bool hit_anything = false;
   float curr_closest = t_max;
 
   for (int i = 0; i < d_num_spheres; ++i)
-    if (d_spheres[i].hit(r, t_min, curr_closest, curr_record)) {
+    if (d_spheres[i].hit(r, t_min, curr_closest, rec)) {
       hit_anything = true;
-      curr_closest = curr_record.t;
-      rec = curr_record;
+      curr_closest = rec.t;
     }
 
   for (int i = 0; i < d_num_planes; ++i)
-    if (d_planes[i].hit(r, t_min, curr_closest, curr_record)) {
+    if (d_planes[i].hit(r, t_min, curr_closest, rec)) {
       hit_anything = true;
-      curr_closest = curr_record.t;
-      rec = curr_record;
+      curr_closest = rec.t;
     }
 
   for (int i = 0; i < d_num_rects; ++i)
-    if (d_rects[i].hit(r, t_min, curr_closest, curr_record)) {
+    if (d_rects[i].hit(r, t_min, curr_closest, rec)) {
       hit_anything = true;
-      curr_closest = curr_record.t;
-      rec = curr_record;
+      curr_closest = rec.t;
     }
 
   return hit_anything;
@@ -99,6 +95,7 @@ __device__ color ray_color(Ray r, curandState *s) {
 
     throughput = throughput * attentuation;
     r = scattered;
+    
   }
 
   return accumulated;
