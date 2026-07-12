@@ -32,7 +32,7 @@ struct Sphere {
     }
 
     rec.t = root;
-    rec.point = r.at(rec.t);
+    rec.point = r.at(root);
     rec.mat_idx = mat_idx;
 
     const vec3 outward_normal = (rec.point - center) / radius;

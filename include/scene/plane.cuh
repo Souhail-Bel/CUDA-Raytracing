@@ -19,11 +19,11 @@ struct Plane {
       return false;
 
     const float t = dot(point - r.origin, normal) / denom;
-    if (t < t_min || t_max)
+    if (t < t_min || t > t_max)
       return false;
 
     rec.t = t;
-    rec.point = r.at(rec.t);
+    rec.point = r.at(t);
     rec.mat_idx = mat_idx;
     rec.set_face_normal(r, normal);
 

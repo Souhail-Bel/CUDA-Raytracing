@@ -1,22 +1,32 @@
-#include "scene/camera.cuh"
-#include "utils/cuda_utils.cuh"
-#include "scene/hittable.cuh"
-#include "render/material.cuh"
 #include "math/ray.cuh"
-#include "render/renderer.cuh"
-#include "scene/sphere.cuh"
 #include "math/vec3.cuh"
+#include "render/material.cuh"
+#include "render/renderer.cuh"
+#include "scene/camera.cuh"
+#include "scene/hittable.cuh"
+#include "scene/plane.cuh"
+#include "scene/rect.cuh"
+#include "scene/sphere.cuh"
+#include "utils/cuda_utils.cuh"
 #include <cstdint>
 
-static constexpr int MAX_OBJECTS = 64;
-
-__constant__ Camera d_cam;
-__constant__ Sphere d_spheres[MAX_OBJECTS];
-__constant__ Material d_materials[MAX_OBJECTS];
-__constant__ int d_num_spheres;
-
+// LIMITS
 static constexpr int MAX_DEPTH = 8;
 static constexpr int NUM_SAMPLING = 16;
+static constexpr int MAX_SPHERES = 32;
+static constexpr int MAX_PLANES = 8;
+static constexpr int MAX_RECTS = 32;
+static constexpr int MAX_MATERIALS = 32;
+
+// CONSTANT MEMORY
+__constant__ Camera d_cam;
+__constant__ Sphere d_spheres[MAX_SPHERES];
+__constant__ Plane d_planes[MAX_PLANES];
+__constant__ Rect d_rects[MAX_RECTS];
+__constant__ Material d_materials[MAX_MATERIALS];
+__constant__ int d_num_spheres;
+__constant__ int d_num_planes;
+__constant__ int d_num_rects;
 
 // ABGR8888, SDL_PIXELFORMAT_RGBA32 on LE Linux/x86
 __device__ __forceinline__ uint32_t color_to_rgba(const color &c) {
@@ -33,33 +43,51 @@ __device__ __forceinline__ color sky(const Ray &r) {
   return lerp(color(1.f, 1.f, 1.f), color(0.7f, 0.4f, 1.f), t);
 }
 
+__device__ bool hit_scene(const Ray &r, float t_min, float t_max,
+                          HitRecord &rec) {
+  HitRecord curr_record;
+  bool hit_anything = false;
+  float curr_closest = t_max;
+
+  for (int i = 0; i < d_num_spheres; ++i)
+    if (d_spheres[i].hit(r, t_min, curr_closest, curr_record)) {
+      hit_anything = true;
+      curr_closest = curr_record.t;
+      rec = curr_record;
+    }
+
+  for (int i = 0; i < d_num_planes; ++i)
+    if (d_planes[i].hit(r, t_min, curr_closest, curr_record)) {
+      hit_anything = true;
+      curr_closest = curr_record.t;
+      rec = curr_record;
+    }
+
+  for (int i = 0; i < d_num_rects; ++i)
+    if (d_rects[i].hit(r, t_min, curr_closest, curr_record)) {
+      hit_anything = true;
+      curr_closest = curr_record.t;
+      rec = curr_record;
+    }
+
+  return hit_anything;
+}
+
 // Traverse scene
 __device__ color ray_color(Ray r, curandState *s) {
-  color throughput(1.f, 1.f, 1.f); // accumulate attentuations
+  color throughput(1.f, 1.f, 1.f); // accumulate attenuations
 
   for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
 
     HitRecord rec;
-    bool hit_anything = false;
-    float curr_closest = 1e30f;
 
-    for (int i = 0; i < d_num_spheres; ++i) {
-      HitRecord curr_record;
-      if (d_spheres[i].hit(r, 0.001f, curr_closest, curr_record)) {
-        hit_anything = true;
-        curr_closest = curr_record.t;
-        rec = curr_record;
-      }
-    }
-
-    if (!hit_anything) // miss
+    if (!hit_scene(r, 0.001f, 1e30f, rec)) // miss
       return throughput * sky(r);
 
     color attentuation;
     Ray scattered;
-    const Material &mat = d_materials[rec.mat_idx];
 
-    if (!scatter(mat, rec, r, attentuation, scattered, s))
+    if (!scatter(d_materials[rec.mat_idx], rec, r, attentuation, scattered, s))
       return color(0.f, 0.f, 0.f); // absorb
 
     throughput = throughput * attentuation;
@@ -131,8 +159,10 @@ void *alloc_rand_states(int width, int height) {
 }
 
 __host__ void init_scene() {
-  const int num_spheres = 6;
-  const int num_materials = 5;
+  const int num_materials = 6;
+  const int num_spheres = 5;
+  const int num_planes = 1;
+  const int num_rects = 1;
 
   const Material mats[num_materials] = {
       {color(0.8f, 0.8f, 0.f), 0.f, 0.f, MatType::Lambertian},
@@ -140,22 +170,33 @@ __host__ void init_scene() {
       {color(1.f, 1.f, 1.f), 0.f, 1.5f, MatType::Dielectric},
       {color(0.2f, 0.6f, 0.2f), 0.f, 0.f, MatType::Lambertian},
       {color(0.1f, 0.1f, 0.4f), 0.5f, 0.f, MatType::Metal},
+      {color(1.f, 0.1f, 0.2f), 0.f, 0.f, MatType::Lambertian},
   };
 
-  const Sphere spheres[num_spheres]{
+  const Sphere spheres[num_spheres] = {
       Sphere(point3(0.f, 0.f, 0.f), 0.5f, 0),
-      Sphere(point3(0.f, -100.5f, 0.f), 100.f, 1),
       Sphere(point3(-10.f, 0.f, 0.f), 4.f, 2),
       Sphere(point3(0.f, 2.f, 0.f), 1.f, 3),
       Sphere(point3(1.f, 1.f, 1.5f), 0.5f, 2),
       Sphere(point3(-1.f, 1.f, 1.f), 0.75f, 4),
   };
 
+  const Plane planes[num_planes] = {
+      Plane(point3(0.f, -0.5f, 0.f), vec3(0.f, 1.f, 0.f), 1)};
+
+  const Rect rects[num_rects] = {
+      Rect(0.5f, 1.3f, 0.f, 1.f, 2.f, RectAxis::YZ, 5),
+  };
+
   CUDA_CHECK(
       cudaMemcpyToSymbol(d_materials, &mats, num_materials * sizeof(Material)));
   CUDA_CHECK(
       cudaMemcpyToSymbol(d_spheres, &spheres, num_spheres * sizeof(Sphere)));
+  CUDA_CHECK(cudaMemcpyToSymbol(d_planes, &planes, num_planes * sizeof(Plane)));
+  CUDA_CHECK(cudaMemcpyToSymbol(d_rects, &rects, num_rects * sizeof(Rect)));
   CUDA_CHECK(cudaMemcpyToSymbol(d_num_spheres, &num_spheres, sizeof(int)));
+  CUDA_CHECK(cudaMemcpyToSymbol(d_num_planes, &num_planes, sizeof(int)));
+  CUDA_CHECK(cudaMemcpyToSymbol(d_num_rects, &num_rects, sizeof(int)));
 }
 
 // KERNEL LAUNCH
